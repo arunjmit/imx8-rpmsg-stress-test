@@ -1,0 +1,14 @@
+#ifndef _RPMSG_STRESS_TEST_H
+#define _RPMSG_STRESS_TEST_H
+
+#include <termios.h>
+
+#define START_PACK_LEN  64
+#define END_PACK_LEN    2048
+#define TOTAL_ITER      20
+
+#define RPMSG_DEV       "/dev/ttyRPMSG30"
+
+speed_t bandwidth[] = { B115200, B230400, B460800, B500000, B576000, B921600, B1000000, B1152000, B1500000, B2000000, B2500000, B3000000, B3500000, B4000000};
+
+#endif
