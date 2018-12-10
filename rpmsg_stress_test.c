@@ -20,6 +20,7 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <math.h>
+#include <getopt.h>
 
 #include "rpmsg_stress_test.h"
 
@@ -144,19 +145,14 @@ int rpmsg_read(int fd, char *data, int data_len)
 }
 
 
-int main()
-{
-  int fd;
+int rpmsg_loop_test(int fd, struct termios *ti){
+  
+  char *data;
   int length;
   int ret;
-  struct termios ti;
-  char *data;
-  
-  fd = init_uart(RPMSG_DEV, &ti);
-
   for (int i = 0; i < sizeof(bandwidth)/sizeof(bandwidth[0]); i++) { 
 
-    set_speed(fd, &ti, bandwidth[i]);
+    set_speed(fd, ti, bandwidth[i]);
     
     for (int j = 0; ; j++) {
 
@@ -193,6 +189,59 @@ int main()
 	}
       }
       free(data);
+    }
+  }
+}
+
+void help_print(void)
+{
+    printf("Usage: rpmsg_stress_test --help \n \
+ rpmsg_stress_test --loop <dummy-var> or rpmsg_stress_test -l <dummy-var> \n \
+ rpmsg_stress_test --send <dummy-var> or rpmsg_stress_test -s <dummy-var> \n \
+ rpmsg_stress_test --receive <dummy-var> or rpmsg_stress_test -r <dummy-var> \n \
+\n");
+}  
+
+int main(int argc, char *argv[])
+{
+  int fd;
+  int ret;
+  int opt_index = 0;
+  int opt = 0;
+  
+  struct termios ti;
+  struct option long_options[] = { { "help", 1, 0, 'h' },
+				   { "loop", 1, 0, 'l' },
+				   { "send", 1, 0, 's' },
+				   {"receive", 1, 0, 'r' }, };
+  
+  if (argc < 2) {
+    help_print();
+    return 0;
+  }
+  
+  fd = init_uart(RPMSG_DEV, &ti);
+
+  while (1) {
+    opt_index = 0;
+    opt = getopt_long(argc, argv, "h:l:s:r:",
+		      long_options, &opt_index);
+    if (-1 == opt)
+      break;
+    switch (opt) {
+    case 'h':
+      help_print();
+      break;
+    case 'l':
+      rpmsg_loop_test(fd, &ti);
+      break;
+    case 's':
+      break;
+    case 'r':
+      break;
+    default:
+      printf("Invalid argument.\n");
+      break;
     }
   }
   close(fd);
