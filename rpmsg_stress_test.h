@@ -4,7 +4,7 @@
 #include <termios.h>
 
 #define START_PACK_LEN  64
-#define END_PACK_LEN    2048
+#define END_PACK_LEN    1024
 #define TOTAL_ITER      20
 
 #define RPMSG_DEV       "/dev/ttyRPMSG30"

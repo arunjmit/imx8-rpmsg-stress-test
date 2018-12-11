@@ -1,7 +1,6 @@
 /*
  *  Filename          : rpmsg_stress_test.c
  *  Description       : Test the rpmsg with loading data and multi bandwidth
- *  Project Scope     : PSA
  *  Author            : Abdul Hussain (habdul)
  *  Author            : Arun Kumar (abenjam1)
  *  Target Hardware   : IMX8
@@ -99,7 +98,6 @@ int set_speed(int fd, struct termios *ti, speed_t speed)
     perror("Can't set speed");
     return -1;
   }
-  //printf("Speed_set_to:%d,", bandwidth_string(speed));
   return 0;
 }
 
@@ -112,6 +110,10 @@ unsigned long getMicrotime(){
   gettimeofday(&currentTime, NULL);
   return currentTime.tv_sec * (int)1e6 + currentTime.tv_usec;
 }
+
+/* This function sends data_len bytes of data with replacing first byte 
+ * of array with `first_byte` argument.
+ */
 
 int rpmsg_send(int fd, int data_len, char first_byte)
 {
@@ -127,6 +129,10 @@ int rpmsg_send(int fd, int data_len, char first_byte)
   free(data);
   return ret;
 }
+
+/* This function recieves `data_len` bytes of data
+ * and copies it to the `data` pointer.
+ */
 
 int rpmsg_read(int fd, char *data, int data_len)
 {
@@ -144,16 +150,57 @@ int rpmsg_read(int fd, char *data, int data_len)
   return data_len;
 }
 
+/* Get a array with time and find the difference of time
+ * for each instance in the array and returns the average 
+ * time difference.
+ */
+
+int average_of_time(unsigned long output_time[])
+{
+  int average;
+  int sum;
+  int time_diff[TOTAL_ITER];
+  int i;
+
+  /* Find the difference between two nearby instace in array */
+  for(i = 0; i < TOTAL_ITER - 1; i++)
+    {
+      time_diff[i] = output_time[i+1] - output_time[i];
+    }
+
+  /* Find the total of all the time difference */
+  for(i = 0; i < TOTAL_ITER - 1; i++)
+    {
+      sum += time_diff[i];
+    }
+
+  average = sum / (TOTAL_ITER - 1);
+  
+  return average;
+}
+
+/* This function is to find the average time taken to 
+ * send a dynamic `length` bytes of data and get back
+ * the same data.
+ */
 
 int rpmsg_loop_test(int fd, struct termios *ti){
   
   char *data;
   int length;
   int ret;
+  unsigned long output_time[TOTAL_ITER];
+
+  /* Send a mode-set data as 'l' to remote processor
+   * to set mode as loopback */
+  rpmsg_send(fd, 4, 'l');
+  
   for (int i = 0; i < sizeof(bandwidth)/sizeof(bandwidth[0]); i++) { 
 
     set_speed(fd, ti, bandwidth[i]);
-    
+
+    printf("Rpmsg Loop back test\n");
+    printf("Speed in baudrate, Data_length in bytes, Average time for %d iterations in micro-sec\n", TOTAL_ITER);
     for (int j = 0; ; j++) {
 
       /* Geometric progression: 64,128,256... */
@@ -162,7 +209,6 @@ int rpmsg_loop_test(int fd, struct termios *ti){
       if (length > END_PACK_LEN )
 	break;
 
-      printf("speed:%d, data_length:%d,time\n",bandwidth_string(bandwidth[i]), length);
       data = (char *)malloc(length);
 
       for (int k = 0; k < TOTAL_ITER; k++) {
@@ -177,20 +223,21 @@ int rpmsg_loop_test(int fd, struct termios *ti){
 
 	  ret = rpmsg_read(fd, data, length);
 	  
-	  if (ret == -1) {
-
+	  if (ret == -1)
 	    break;
-
-	  } else {
-
-	    printf(", ,%lu\n",getMicrotime());
-
-	  }
+	  else
+	    output_time[k] = getMicrotime();
 	}
       }
       free(data);
+      printf("%d, %d, %d\n", bandwidth_string(bandwidth[i]), length, average_of_time(output_time));
     }
   }
+
+  /* Send a mode-set data as 'e' to remote processor
+   * to set mode as exit from loop back mode.
+   */
+  rpmsg_send(fd, 4, 'e');
 }
 
 void help_print(void)
@@ -201,6 +248,47 @@ void help_print(void)
  rpmsg_stress_test --receive <dummy-var> or rpmsg_stress_test -r <dummy-var> \n \
 \n");
 }  
+
+void receive_test(int fd)
+{
+
+  int length;
+  int ret;
+  char *data;
+  unsigned long output_time[TOTAL_ITER];
+
+  printf("Receive test\n");
+  printf("length in Bytes, Average time in microseconds for %d iteration\n", TOTAL_ITER);
+
+  /* Send a mode-set data as 'a' to remote processor
+   * to set mode as send data only mode and host as 
+   * receive data only mode 
+   */
+  rpmsg_send(fd, 4, 'a');
+
+  for (int j = 0; ; j++)
+    {
+      /* Geometric progression: 64,128,256... */
+      length = START_PACK_LEN * pow(2,j);
+      
+      if (length > END_PACK_LEN)
+	break;
+
+      data = (char *)malloc(length);
+
+      for(int i = 0; i < TOTAL_ITER; i++)
+	{
+	  ret = rpmsg_read(fd, data, length);
+	  if (ret == -1)
+	    break;
+	  else
+	    output_time[i] = getMicrotime();
+	}
+      printf("%d , %d\n", length, average_of_time(output_time));
+      free(data);
+    }
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -238,6 +326,8 @@ int main(int argc, char *argv[])
     case 's':
       break;
     case 'r':
+      set_speed(fd, &ti, bandwidth[0]);
+      receive_test(fd);
       break;
     default:
       printf("Invalid argument.\n");
